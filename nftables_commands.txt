@@ -1,0 +1,3 @@
+sudo nft add table ip nat
+sudo nft add chain ip nat output '{ type nat hook output priority 0; }'
+sudo nft add rule ip nat output ip daddr 139.162.182.69 tcp dport 443 meta skuid != root redirect to 5555
