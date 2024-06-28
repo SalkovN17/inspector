@@ -15,6 +15,33 @@ proxy::session::~session()
 	TI_TRACE();
 }
 
+std::shared_ptr<crypto::private_key>
+proxy::session::get_pkey()
+{
+	auto proxy = this->proxy_ptr.lock();
+	if (!proxy)
+		throw std::runtime_error("get proxy failed");
+
+	return proxy->pkey;
+}
+
+std::shared_ptr<crypto::certificate>
+proxy::session::get_certificate(crypto::certificate& peer)
+{
+	auto proxy = this->proxy_ptr.lock();
+	if (!proxy)
+		throw std::runtime_error("get proxy failed");
+
+	if (proxy->certs_cache.find("1") != proxy->certs_cache.end())
+		return proxy->certs_cache["1"];
+	else
+	{
+		auto c = crypto::certificate::clone(peer, *proxy->ca_cert, *proxy->ca_pkey, *proxy->pkey);
+		proxy->certs_cache["1"] = c;
+		return c;
+	}
+}
+
 proxy::listener::listener(asio::io_context& io,
                           std::weak_ptr<proxy> proxy_ptr) :
 	net::proxy::listener(io),
@@ -39,8 +66,11 @@ proxy::proxy(boost::asio::io_service& io,
              std::string&& ca_pkey_path) :
 	io(io),
 	port(port),
+	ca_pkey_path(std::move(ca_pkey_path)),
 	ca_cert_path(std::move(ca_cert_path)),
-	ca_pkey_path(std::move(ca_pkey_path))
+	ca_pkey(new crypto::private_key(this->ca_pkey_path)),
+	ca_cert(new crypto::certificate(this->ca_cert_path)),
+	pkey(new crypto::private_key())
 {
 	TI_TRACE();
 	TI_LOG(DEBUG, "proxy constructor\n");

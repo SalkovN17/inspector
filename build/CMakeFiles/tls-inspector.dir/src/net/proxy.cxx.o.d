@@ -1675,10 +1675,15 @@ CMakeFiles/tls-inspector.dir/src/net/proxy.cxx.o: \
  /usr/include/boost/asio/windows/random_access_handle.hpp \
  /usr/include/boost/asio/windows/stream_handle.hpp \
  /usr/include/boost/asio/write_at.hpp \
- /usr/include/boost/asio/impl/write_at.hpp /usr/include/c++/11/iostream \
- /usr/include/linux/netfilter_ipv4.h /usr/include/linux/netfilter.h \
- /usr/include/linux/in.h /usr/include/linux/libc-compat.h \
- /usr/include/linux/socket.h \
+ /usr/include/boost/asio/impl/write_at.hpp \
+ /home/compick/tls-inspector/include/crypto/certificate.hh \
+ /usr/local/include/openssl/ossl_typ.h \
+ /home/compick/tls-inspector/include/crypto/csr.hh \
+ /home/compick/tls-inspector/include/crypto/private_key.hh \
+ /home/compick/tls-inspector/include/crypto/x509_name.hh \
+ /usr/include/c++/11/iostream /usr/include/linux/netfilter_ipv4.h \
+ /usr/include/linux/netfilter.h /usr/include/linux/in.h \
+ /usr/include/linux/libc-compat.h /usr/include/linux/socket.h \
  /usr/include/x86_64-linux-gnu/asm/byteorder.h \
  /usr/include/linux/byteorder/little_endian.h /usr/include/linux/swab.h \
  /usr/include/x86_64-linux-gnu/asm/swab.h /usr/include/linux/in6.h

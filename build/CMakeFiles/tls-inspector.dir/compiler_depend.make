@@ -11310,6 +11310,11 @@ CMakeFiles/tls-inspector.dir/src/net/proxy.cxx.o: ../src/net/proxy.cxx \
   /usr/include/boost/asio/windows/stream_handle.hpp \
   /usr/include/boost/asio/write_at.hpp \
   /usr/include/boost/asio/impl/write_at.hpp \
+  ../include/crypto/certificate.hh \
+  /usr/local/include/openssl/ossl_typ.h \
+  ../include/crypto/csr.hh \
+  ../include/crypto/private_key.hh \
+  ../include/crypto/x509_name.hh \
   /usr/include/c++/11/iostream \
   /usr/include/linux/netfilter_ipv4.h \
   /usr/include/linux/netfilter.h \

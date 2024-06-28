@@ -157,7 +157,88 @@ void session::on_handshake_with_server(beast::error_code ec)
 	}
 
 	TI_LOG(DEBUG, "handshake with server done!");
-	this->do_close();
+
+	this->handshake_with_client();
+}
+
+void session::handshake_with_client()
+{
+	X509 * cert = SSL_get_peer_certificate(this->client_stream.native_handle());
+	if (!cert)
+	{
+		TI_LOG(DEBUG, "get peer certificate failed");
+		return;
+	}
+
+	X509_print_fp(stdout, cert);
+
+	crypto::certificate orig(cert);
+	try
+	{
+		auto pkey = this->get_pkey();
+		auto new_cert = this->get_certificate(orig);
+		orig.release();
+
+		auto ctx = this->server_stream.native_handle();
+		SSL_use_PrivateKey(ctx, pkey->get());
+		SSL_use_certificate(ctx, new_cert->get());
+
+		auto on_handshake_with_server = beast::bind_front_handler(&session::on_handshake_with_client,
+	                                                              this->shared_from_this());
+		this->server_stream.async_handshake(ssl::stream_base::server, std::move(on_handshake_with_server));
+	}
+	catch(const std::exception& e)
+	{
+		orig.release();
+		throw;
+	}
+
+	return;
+}
+
+void session::on_handshake_with_client(beast::error_code ec)
+{
+	if (ec)
+	{
+		TI_LOG(DEBUG, "handshake with client failed: %s", ec.message().c_str());
+		return;
+	}
+
+	TI_LOG(DEBUG, "handshake with client done!");
+	this->do_read_from_client();
+}
+
+void session::do_read_from_client()
+{
+	req.reset(new http::request<http::vector_body<uint8_t>>());
+
+	beast::get_lowest_layer(this->server_stream).expires_after(std::chrono::seconds(30));
+	auto on_read_from_server = beast::bind_front_handler(&session::on_read_from_client,
+	                                                     this->shared_from_this());
+	http::async_read(this->server_stream, this->buffer, *this->req, std::move(on_read_from_server));
+}
+
+void session::on_read_from_client(beast::error_code ec, std::size_t bytes_transferred)
+{
+	boost::ignore_unused(bytes_transferred);
+
+	if(ec == http::error::end_of_stream)
+	{
+		TI_LOG(DEBUG, "on_read_from_client, end of stream");
+		return;
+	}
+
+	if(ec)
+	{
+		TI_LOG(DEBUG, "read from client failed: %s", ec.message().c_str());
+		return;
+	}
+
+	TI_LOG(DEBUG, "read from server done");
+
+    for (const auto& field : *this->req) {
+        std::cout << field.name_string() << ": " << field.value() << "\n";
+    }
 }
 
 void session::do_close()

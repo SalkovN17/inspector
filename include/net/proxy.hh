@@ -7,6 +7,8 @@
 #include <boost/beast/ssl/ssl_stream.hpp>
 #include <boost/asio.hpp>
 
+#include <crypto/certificate.hh>
+
 namespace net {
 namespace proxy{
 
@@ -25,6 +27,10 @@ private:
 	void on_connect_to_server(beast::error_code ec);
 	void handshake_with_server();
 	void on_handshake_with_server(beast::error_code ec);
+	void handshake_with_client();
+	void on_handshake_with_client(beast::error_code ec);
+	void do_read_from_client();
+	void on_read_from_client(beast::error_code ec, std::size_t bytes_transferred);
 	void do_close();
 protected:
 	beast::flat_buffer buffer;
@@ -40,6 +46,11 @@ public:
 	session() = delete;
 	session(tcp::socket&& socket);
 	virtual ~session();
+
+	virtual std::shared_ptr<crypto::private_key>
+	get_pkey() = 0;
+	virtual std::shared_ptr<crypto::certificate>
+	get_certificate(crypto::certificate& peer) = 0;
 
 	void run();
 };

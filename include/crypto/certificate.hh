@@ -16,6 +16,11 @@ private:
 public:
 	static bool is_certificate(const std::string& path);
 
+	static std::shared_ptr<certificate> clone(certificate& orig,
+	                                          certificate& ca,
+	                                          private_key& ca_pkey,
+	                                          private_key& pkey);
+
 	certificate() = delete;
 	certificate(const std::vector<uint8_t>& data);
 	certificate(const uint8_t * data, size_t data_len);
@@ -39,5 +44,6 @@ public:
 	int get_serial();
 	std::vector<uint8_t> convert_to_der() const;
 	bool subject_is_eq(const x509_name& subject_name);
+	X509 * release();
 };
 }; // namespace crypto

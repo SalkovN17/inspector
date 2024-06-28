@@ -224,6 +224,60 @@ bool certificate::is_certificate(const std::string& path)
 	return true;
 }
 
+std::shared_ptr<certificate> certificate::clone(certificate& orig,
+                                                certificate& ca,
+                                                private_key& ca_pkey,
+                                                private_key& pkey)
+{
+	X509 * new_cert = X509_new();
+	if (!new_cert)
+		throw std::runtime_error("create empty certificate failed");
+	std::unique_ptr<X509, decltype(&X509_free)> new_cert_ptr(new_cert, X509_free);
+
+	X509 * orig_cert = orig.get();
+	X509 * ca_cert = ca.get();
+	EVP_PKEY * ca_private_key = ca_pkey.get();
+	EVP_PKEY * private_key = pkey.get();
+
+	if (!X509_set_version(new_cert, X509_get_version(orig_cert)))
+		throw std::runtime_error("set version to certificate failed");
+
+	if (!X509_set_serialNumber(new_cert, X509_get_serialNumber(orig_cert)))
+		throw std::runtime_error("set serial to certificate failed");
+
+	if (!X509_set_subject_name(new_cert, X509_get_subject_name(orig_cert)))
+		throw std::runtime_error("set subject name to certificate failed");
+
+	if (!X509_set_issuer_name(new_cert, X509_get_subject_name(ca_cert)))
+		throw std::runtime_error("set issuer name to certificate failed");
+
+	if (!X509_set_pubkey(new_cert, private_key))
+		throw std::runtime_error("set public key to certificate failed");
+
+	if (!X509_gmtime_adj(X509_getm_notBefore(new_cert), 0))
+		throw std::runtime_error("set not before to certificate failed");
+
+	if (!X509_gmtime_adj(X509_getm_notAfter(new_cert), app::time_constants::seconds_per_year))
+		throw std::runtime_error("set not after to certificate failed");
+
+	int ext_count = X509_get_ext_count(orig_cert);
+	for (int i = 0; i < ext_count; i++)
+	{
+		X509_EXTENSION * ext = X509_get_ext(orig_cert, i);
+		if (!ext)
+			throw std::runtime_error("get extension from certificate failed");
+
+		if (!X509_add_ext(new_cert, ext, -1))
+			throw std::runtime_error("add extension to certificate failed");
+	}
+
+	if (!X509_sign(new_cert, ca_private_key, EVP_sha256()))
+		throw std::runtime_error("sign certificate failed");
+
+	new_cert_ptr.release();
+	return std::shared_ptr<certificate>(new certificate(new_cert));
+}
+
 std::vector<uint8_t> certificate::convert_to_der() const
 {
 	uint8_t * data = nullptr;
@@ -241,5 +295,12 @@ std::vector<uint8_t> certificate::convert_to_der() const
 bool certificate::subject_is_eq(const x509_name& subject_name)
 {
 	return X509_NAME_cmp(X509_get_subject_name(this->cert), subject_name.get()) == 0;
+}
+
+X509 * certificate::release()
+{
+	X509 * xcert = this->cert;
+	this->cert = nullptr;
+	return xcert;
 }
 }; // namespace crypto
