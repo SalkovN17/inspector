@@ -44,6 +44,8 @@ public:
 	int get_serial();
 	std::vector<uint8_t> convert_to_der() const;
 	bool subject_is_eq(const x509_name& subject_name);
+
+	std::string get_key();
 	X509 * release();
 };
 }; // namespace crypto

@@ -296,6 +296,24 @@ bool certificate::subject_is_eq(const x509_name& subject_name)
 	return X509_NAME_cmp(X509_get_subject_name(this->cert), subject_name.get()) == 0;
 }
 
+std::string certificate::get_key()
+{
+	ASN1_INTEGER * serial_number_asn1 = X509_get_serialNumber(this->cert);
+	BIGNUM * bn = ASN1_INTEGER_to_BN(serial_number_asn1, nullptr);
+	char * serial_number_hex = BN_bn2hex(bn);
+
+	X509_NAME * issuer_name = X509_get_issuer_name(this->cert);
+	char * issuer_cstr = X509_NAME_oneline(issuer_name, nullptr, 0);
+
+	std::string key = std::string(serial_number_hex) + "|" + std::string(issuer_cstr);
+
+	BN_free(bn);
+	OPENSSL_free(serial_number_hex);
+	OPENSSL_free(issuer_cstr);
+
+	return key;
+}
+
 X509 * certificate::release()
 {
 	X509 * xcert = this->cert;

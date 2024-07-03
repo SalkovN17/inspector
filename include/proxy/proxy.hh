@@ -43,8 +43,7 @@ private:
 	private:
 		std::weak_ptr<proxy> proxy_ptr;
 	public:
-		listener(asio::io_context& io,
-		         std::weak_ptr<proxy> proxy_ptr);
+		listener(asio::io_context& io, std::weak_ptr<proxy> proxy_ptr);
 		~listener();
 		std::shared_ptr<net::proxy::session> create_session(tcp::socket& socket) override;
 	};
@@ -56,7 +55,7 @@ private:
 
 	std::shared_ptr<listener> intercepting_listener;
 public:
-	std::map<std::string, std::shared_ptr<crypto::certificate>> certs_cache;
+	std::unordered_map<std::string, std::shared_ptr<crypto::certificate>> certs_cache;
 	std::shared_ptr<crypto::private_key> ca_pkey;
 	std::shared_ptr<crypto::certificate> ca_cert;
 	std::shared_ptr<crypto::private_key> pkey;
