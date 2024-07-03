@@ -31,7 +31,17 @@ private:
 	void on_handshake_with_client(beast::error_code ec);
 	void do_read_from_client();
 	void on_read_from_client(beast::error_code ec, std::size_t bytes_transferred);
-	void do_close();
+	void do_write_to_server();
+	void on_write_to_server(beast::error_code ec, std::size_t bytes_transferred);
+	void do_read_from_server();
+	void on_read_from_server(beast::error_code ec, std::size_t bytes_transferred);
+	void do_write_to_client();
+	void on_write_to_client(bool close, beast::error_code ec, std::size_t bytes_transferred);
+	void do_close_both_stream();
+	void do_close_client_stream();
+	void on_close_client_stream(beast::error_code ec);
+	void do_close_server_stream();
+	void on_close_server_stream(beast::error_code ec);
 protected:
 	beast::flat_buffer buffer;
 	std::string error;

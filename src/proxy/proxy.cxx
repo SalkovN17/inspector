@@ -33,9 +33,13 @@ proxy::session::get_certificate(crypto::certificate& peer)
 		throw std::runtime_error("get proxy failed");
 
 	if (proxy->certs_cache.find("1") != proxy->certs_cache.end())
+	{
+		TI_LOG(DEBUG, "found certificate in cache");
 		return proxy->certs_cache["1"];
+	}
 	else
 	{
+		TI_LOG(DEBUG, "no certificate in cache, clone from peer");
 		auto c = crypto::certificate::clone(peer, *proxy->ca_cert, *proxy->ca_pkey, *proxy->pkey);
 		proxy->certs_cache["1"] = c;
 		return c;

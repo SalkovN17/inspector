@@ -104,7 +104,7 @@ tcp::endpoint session::get_original_dst()
 	if (getsockopt(sock_fd, SOL_IP, SO_ORIGINAL_DST, &orig_dst, &orig_dst_len) == -1)
 	{
 		TI_LOG(DEBUG, "get original dst from socket failed");
-		this->do_close();
+		throw std::runtime_error("get original dst from socket failed");
 	}
 
 	asio::ip::address ip_address = asio::ip::address::from_string(inet_ntoa(orig_dst.sin_addr));
@@ -133,7 +133,7 @@ void session::on_connect_to_server(beast::error_code ec)
 	if (ec)
 	{
 		TI_LOG(DEBUG, "connect to server failed");
-		return this->do_close();
+		return;
 	}
 
 	this->handshake_with_server();
@@ -153,7 +153,7 @@ void session::on_handshake_with_server(beast::error_code ec)
 	if (ec)
 	{
 		TI_LOG(DEBUG, "handshake with server failed: %s", ec.message().c_str());
-		return this->do_close();
+		return;
 	}
 
 	TI_LOG(DEBUG, "handshake with server done!");
@@ -169,8 +169,6 @@ void session::handshake_with_client()
 		TI_LOG(DEBUG, "get peer certificate failed");
 		return;
 	}
-
-	X509_print_fp(stdout, cert);
 
 	crypto::certificate orig(cert);
 	try
@@ -213,9 +211,9 @@ void session::do_read_from_client()
 	req.reset(new http::request<http::vector_body<uint8_t>>());
 
 	beast::get_lowest_layer(this->server_stream).expires_after(std::chrono::seconds(30));
-	auto on_read_from_server = beast::bind_front_handler(&session::on_read_from_client,
+	auto on_read_from_client = beast::bind_front_handler(&session::on_read_from_client,
 	                                                     this->shared_from_this());
-	http::async_read(this->server_stream, this->buffer, *this->req, std::move(on_read_from_server));
+	http::async_read(this->server_stream, this->buffer, *this->req, std::move(on_read_from_client));
 }
 
 void session::on_read_from_client(beast::error_code ec, std::size_t bytes_transferred)
@@ -223,10 +221,7 @@ void session::on_read_from_client(beast::error_code ec, std::size_t bytes_transf
 	boost::ignore_unused(bytes_transferred);
 
 	if(ec == http::error::end_of_stream)
-	{
-		TI_LOG(DEBUG, "on_read_from_client, end of stream");
-		return;
-	}
+		return this->do_close_both_stream();
 
 	if(ec)
 	{
@@ -234,21 +229,133 @@ void session::on_read_from_client(beast::error_code ec, std::size_t bytes_transf
 		return;
 	}
 
-	TI_LOG(DEBUG, "read from server done");
+	this->do_write_to_server();
+	// TI_LOG(DEBUG, "read from server done");
 
-    for (const auto& field : *this->req) {
-        std::cout << field.name_string() << ": " << field.value() << "\n";
-    }
+    // for (const auto& field : *this->req) {
+    //     std::cout << field.name_string() << ": " << field.value() << "\n";
+    // }
 }
 
-void session::do_close()
+void session::do_write_to_server()
 {
-	beast::error_code ec;
+	this->res.reset(new http::response<http::vector_body<uint8_t>>());
 
-	auto& client_tcp_stream = beast::get_lowest_layer(this->client_stream);
-	auto& server_tcp_stream = beast::get_lowest_layer(this->server_stream);
-	client_tcp_stream.socket().shutdown(asio::ip::tcp::socket::shutdown_send, ec);
-	server_tcp_stream.socket().shutdown(asio::ip::tcp::socket::shutdown_send, ec);
+	beast::get_lowest_layer(this->client_stream).expires_after(std::chrono::seconds(30));
+	auto on_write_to_server = beast::bind_front_handler(&session::on_write_to_server,
+	                                                     this->shared_from_this());
+	http::async_write(this->client_stream, *this->req, std::move(on_write_to_server));
 }
+
+void session::on_write_to_server(beast::error_code ec, std::size_t bytes_transferred)
+{
+	boost::ignore_unused(bytes_transferred);
+
+	if (ec)
+	{
+		TI_LOG(DEBUG, "write to server failed: %s", ec.message().c_str());
+		return;
+	}
+
+	this->do_read_from_server();
+}
+
+void session::do_read_from_server()
+{
+	auto on_read_from_server = beast::bind_front_handler(&session::on_read_from_server,
+	                                                     this->shared_from_this());
+	http::async_read(this->client_stream, this->buffer, *this->res, std::move(on_read_from_server));
+}
+
+void session::on_read_from_server(beast::error_code ec, std::size_t bytes_transferred)
+{
+	boost::ignore_unused(bytes_transferred);
+
+	if (ec)
+	{
+		TI_LOG(DEBUG, "read from server failed: %s", ec.message().c_str());
+		return;
+	}
+
+	this->do_write_to_client();
+}
+
+void session::do_write_to_client()
+{
+	auto on_write_to_client = beast::bind_front_handler(&session::on_write_to_client,
+	                                                    this->shared_from_this(),
+	                                                    this->res->need_eof());
+	http::async_write(this->server_stream, *this->res, std::move(on_write_to_client));
+}
+
+void session::on_write_to_client(bool close, beast::error_code ec, std::size_t bytes_transferred)
+{
+	boost::ignore_unused(bytes_transferred);
+
+	if (ec == asio::error::operation_aborted)
+	{
+		TI_LOG(DEBUG, "sending operation canceled");
+		return;
+	}
+
+	if (ec)
+	{
+		TI_LOG(DEBUG, "write to client failed: %s", ec.message().c_str());
+		return;
+	}
+
+	if (close)
+	{
+		TI_LOG(DEBUG, "client has closed connection");
+		return this->do_close_both_stream();
+	}
+
+	this->do_read_from_client();
+}
+
+void session::do_close_both_stream()
+{
+	this->do_close_client_stream();
+	this->do_close_server_stream();
+}
+
+void session::do_close_client_stream()
+{
+	beast::get_lowest_layer(this->client_stream).expires_after(std::chrono::seconds(30));
+	auto on_close_client_stream = beast::bind_front_handler(&session::on_close_client_stream,
+	                                                        this->shared_from_this());
+	this->client_stream.async_shutdown(std::move(on_close_client_stream));
+}
+
+void session::on_close_client_stream(beast::error_code ec)
+{
+	if (ec == asio::error::eof)
+		ec = {};
+
+	if (ec)
+		TI_LOG(DEBUG, "shutdown with server failed: %s", ec.message().c_str());
+
+	TI_LOG(DEBUG, "connection with server closed gracefully");
+}
+
+void session::do_close_server_stream()
+{
+	beast::get_lowest_layer(this->server_stream).expires_after(std::chrono::seconds(30));
+	auto on_close_server_stream = beast::bind_front_handler(&session::on_close_server_stream,
+	                                                        this->shared_from_this());
+	this->server_stream.async_shutdown(std::move(on_close_server_stream));
+}
+
+void session::on_close_server_stream(beast::error_code ec)
+{
+	if (ec == asio::error::eof)
+		ec = {};
+
+	if (ec)
+		TI_LOG(DEBUG, "shutdown with client failed: %s", ec.message().c_str());
+
+	TI_LOG(DEBUG, "connection with client closed gracefully");
+}
+
 }; // namespace proxy
 }; // namespace net

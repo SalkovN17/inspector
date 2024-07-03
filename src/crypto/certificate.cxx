@@ -43,8 +43,7 @@ certificate::certificate(const std::string& path)
 	FILE * file = fopen(path.c_str(), "r");
 	if (!file)
 	{
-		std::string filename = crypto::get_filename_by_path(path);
-		throw std::runtime_error("can't open file '" + filename + "' with certificate");
+		throw std::runtime_error("can't open file '" + path + "' with certificate");
 	}
 	std::unique_ptr<FILE, decltype(&fclose)> file_ptr(file, fclose);
 
