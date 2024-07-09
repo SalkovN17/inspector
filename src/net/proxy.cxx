@@ -139,11 +139,94 @@ void session::on_connect_to_server(beast::error_code ec)
 	this->handshake_with_server();
 }
 
+std::string session::extract_sni(const char* data, std::size_t length)
+{
+	const unsigned char* p = reinterpret_cast<const unsigned char*>(data);
+	const unsigned char* end = p + length;
+
+	if (p + 5 > end || p[0] != 0x16 || p[1] != 0x03) {
+		throw std::runtime_error("Not a valid ClientHello message");
+	}
+	p += 5;
+
+	if (p + 38 > end) {
+		throw std::runtime_error("Not enough data for ClientHello header");
+	}
+	p += 38;
+
+	if (p + 1 > end) {
+		throw std::runtime_error("Not enough data for session ID");
+	}
+	size_t session_id_length = p[0];
+	p += 1 + session_id_length;
+
+	if (p + 2 > end) {
+		throw std::runtime_error("Not enough data for cipher suites");
+	}
+	size_t cipher_suites_length = (p[0] << 8) | p[1];
+	p += 2 + cipher_suites_length;
+
+	if (p + 1 > end) {
+		throw std::runtime_error("Not enough data for compression methods");
+	}
+	size_t compression_methods_length = p[0];
+	p += 1 + compression_methods_length;
+
+	if (p + 2 > end) {
+		throw std::runtime_error("Not enough data for extensions length");
+	}
+	size_t extensions_length = (p[0] << 8) | p[1];
+	p += 2;
+
+	while (p + 4 <= end)
+	{
+		size_t extension_type = (p[0] << 8) | p[1];
+		size_t extension_length = (p[2] << 8) | p[3];
+		p += 4;
+
+		if (p + extension_length > end) {
+			throw std::runtime_error("Not enough data for extension");
+		}
+
+		if (extension_type == 0x00) { // SNI extension
+			const unsigned char* sni_data = p;
+			if (sni_data + 5 <= end && sni_data[0] == 0x00) { // Hostname type
+				size_t sni_length = (sni_data[3] << 8) | sni_data[4];
+				const char* sni = reinterpret_cast<const char*>(sni_data + 5);
+				if (sni + sni_length <= reinterpret_cast<const char*>(end)) {
+					return std::string(sni, sni_length);
+				} else {
+					throw std::runtime_error("SNI length exceeds buffer size");
+				}
+			} else {
+				throw std::runtime_error("Invalid SNI data");
+			}
+		}
+
+		p += extension_length;
+	}
+
+	throw std::runtime_error("No SNI found");
+}
+
 void session::handshake_with_server()
 {
+	int sockfd = beast::get_lowest_layer(this->server_stream).socket().native_handle();
+
+	char buf[1024] = {0};
+	ssize_t peeked_length = recv(sockfd, buf, sizeof(buf), MSG_PEEK);
+	if (peeked_length <= 0)
+	{
+		std::cout << "error, peeked_length = " << peeked_length << std::endl;
+		return;
+	}
+
+	std::string sni = this->extract_sni(buf, peeked_length);
+
+	SSL_set_tlsext_host_name(this->client_stream.native_handle(), sni.c_str());
+
 	auto on_handshake_with_server = beast::bind_front_handler(&session::on_handshake_with_server,
 	                                                          this->shared_from_this());
-
 	this->client_stream.async_handshake(ssl::stream_base::client,
 	                                    std::move(on_handshake_with_server));
 }
@@ -335,6 +418,8 @@ void session::on_close_client_stream(beast::error_code ec)
 	if (ec)
 		TI_LOG(DEBUG, "shutdown with server failed: %s", ec.message().c_str());
 
+	beast::get_lowest_layer(this->client_stream).socket().shutdown(tcp::socket::shutdown_both, ec);
+
 	TI_LOG(DEBUG, "connection with server closed gracefully");
 }
 
@@ -354,6 +439,7 @@ void session::on_close_server_stream(beast::error_code ec)
 	if (ec)
 		TI_LOG(DEBUG, "shutdown with client failed: %s", ec.message().c_str());
 
+	beast::get_lowest_layer(this->server_stream).socket().shutdown(tcp::socket::shutdown_both, ec);
 	TI_LOG(DEBUG, "connection with client closed gracefully");
 }
 

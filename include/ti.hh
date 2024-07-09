@@ -30,7 +30,7 @@ private:
 	ti();
 public:
 	static constexpr auto& default_config_file = "/home/nikita/tls-inspector/tls-inspector.conf";
-	static const int io_threads_limit = 2;
+	static const int io_threads_limit = 19;
 
 	static void init(const std::string& config);
 	static void deinit();

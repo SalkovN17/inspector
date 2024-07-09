@@ -55,6 +55,7 @@ private:
 
 	std::shared_ptr<listener> intercepting_listener;
 public:
+	std::mutex certs_cache_mutex;
 	std::unordered_map<std::string, std::shared_ptr<crypto::certificate>> certs_cache;
 	std::shared_ptr<crypto::private_key> ca_pkey;
 	std::shared_ptr<crypto::certificate> ca_cert;

@@ -34,6 +34,7 @@ proxy::session::get_certificate(crypto::certificate& peer)
 
 	std::string key = peer.get_key();
 
+	std::lock_guard<std::mutex> lock(proxy->certs_cache_mutex);
 	if (proxy->certs_cache.find(key) != proxy->certs_cache.end())
 	{
 		TI_LOG(DEBUG, "found certificate in cache with key %s", key.c_str());

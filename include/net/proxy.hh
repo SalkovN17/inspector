@@ -25,6 +25,7 @@ private:
 
 	void connect_to_server(tcp::endpoint& endpoint);
 	void on_connect_to_server(beast::error_code ec);
+	std::string extract_sni(const char * data, std::size_t length);
 	void handshake_with_server();
 	void on_handshake_with_server(beast::error_code ec);
 	void handshake_with_client();
